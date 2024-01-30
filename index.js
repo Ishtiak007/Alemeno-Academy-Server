@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000;
 
 //middleware
@@ -30,7 +31,9 @@ async function run() {
 
 
     const coursesCollection = client.db("AlemenoAcademyDB").collection("courses");
+    const cartsCollection = client.db("AlemenoAcademyDB").collection("carts");
     const usersCollection = client.db("AlemenoAcademyDB").collection("users");
+    const paymentCollection = client.db("AlemenoAcademyDB").collection("payments");
 
     // Courses related api
     app.get('/courses',async(req,res)=>{
@@ -65,15 +68,64 @@ async function run() {
     // Cart Related API
     app.post('/carts',async(req,res)=>{
         const cartItem = req.body;
-        const result = await coursesCollection.insertOne(cartItem);
+        const result = await cartsCollection.insertOne(cartItem);
         res.send(result);
     });
     app.get('/carts',async(req,res)=>{
         const email = req.query.email;
         const query ={email:email};
-        const result = await coursesCollection.find(query).toArray();
+        const result = await cartsCollection.find(query).toArray();
         res.send(result);
     });
+    app.delete('/carts/:id',async(req,res)=>{
+        const id = req.params.id;
+        const query = {_id : new ObjectId(id)}
+        const result = await cartsCollection.deleteOne(query);
+        res.send(result)
+    });
+
+
+
+    // payment intent
+    app.post('/create-payment-intent',async(req,res)=>{
+        const {price}=req.body;
+        const amount = parseInt(price * 100);
+        console.log(amount,'amount insite the intent')
+  
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount : amount,
+          currency : 'usd',
+          payment_method_types:['card']
+        });
+        res.send({
+          clientSecret: paymentIntent.client_secret
+        })
+      })
+      // payment related API
+      app.post('/payments', async (req, res) => {
+        const payment = req.body;
+        const paymentResult = await paymentCollection.insertOne(payment);
+  
+        //  carefully delete each item from the cart
+        console.log('payment info', payment);
+        const query = {
+          _id: {
+            $in: payment.cartIds.map(id => new ObjectId(id))
+          }
+        };
+  
+        const deleteResult = await cartsCollection.deleteMany(query);
+  
+        res.send({ paymentResult, deleteResult });
+      });
+      app.get('/payments/:email',async(req,res)=>{
+        const query = {email : req.params.email}
+        if(req.params.email !== req.decoded.email){
+          return res.status(403).send({message: 'forbidden access'})
+        }
+        const result = await paymentCollection.find(query).toArray();
+        res.send(result)
+      });
 
 
 
