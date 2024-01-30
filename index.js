@@ -1,6 +1,7 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000;
@@ -33,7 +34,30 @@ async function run() {
     const coursesCollection = client.db("AlemenoAcademyDB").collection("courses");
     const cartsCollection = client.db("AlemenoAcademyDB").collection("carts");
     const usersCollection = client.db("AlemenoAcademyDB").collection("users");
-    const paymentCollection = client.db("AlemenoAcademyDB").collection("payments");
+    const paymentsCollection = client.db("AlemenoAcademyDB").collection("payments");
+
+
+    //JWT RELATED API
+    app.post('/jwt',async(req,res)=>{
+        const user = req.body;
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,{expiresIn:'1h'});
+        res.send({token});
+    });
+    //MIDDLEWARE
+    const verifyToken =(req,res,next)=>{
+        // console.log('inside varified token',req.headers.authorization);
+        if(!req.headers.authorization){
+        return res.status(401).send({message:'unauthorized access'});
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      jwt.verify(token,process.env.ACCESS_TOKEN_SECRET,(err,decoded)=>{
+        if(err){
+          return res.status(401).send({message: 'unauthorized access'})
+        }
+        req.decoded=decoded;
+        next();
+      })
+    }
 
     // Courses related api
     app.get('/courses',async(req,res)=>{
@@ -71,7 +95,7 @@ async function run() {
         const result = await cartsCollection.insertOne(cartItem);
         res.send(result);
     });
-    app.get('/carts',async(req,res)=>{
+    app.get('/carts',verifyToken,async(req,res)=>{
         const email = req.query.email;
         const query ={email:email};
         const result = await cartsCollection.find(query).toArray();
@@ -104,7 +128,7 @@ async function run() {
       // payment related API
       app.post('/payments', async (req, res) => {
         const payment = req.body;
-        const paymentResult = await paymentCollection.insertOne(payment);
+        const paymentResult = await paymentsCollection.insertOne(payment);
   
         //  carefully delete each item from the cart
         console.log('payment info', payment);
@@ -118,14 +142,43 @@ async function run() {
   
         res.send({ paymentResult, deleteResult });
       });
-      app.get('/payments/:email',async(req,res)=>{
+      app.get('/payments/:email',verifyToken,async(req,res)=>{
         const query = {email : req.params.email}
         if(req.params.email !== req.decoded.email){
           return res.status(403).send({message: 'forbidden access'})
         }
-        const result = await paymentCollection.find(query).toArray();
+        const result = await paymentsCollection.find(query).toArray();
         res.send(result)
       });
+      //analytics
+    //   app.get('/admin-stats',async(req,res)=>{
+    //     const users = await usersCollection.estimatedDocumentCount();
+    //     const menuItems = await menuCollection.estimatedDocumentCount();
+    //     const orders = await paymentCollection.estimatedDocumentCount();
+  
+    //     // this is not the bese way to revenue
+    //     // const payments = await paymentCollection.find().toArray();
+    //     // const revenue = payments.reduce((total,payment)=>total+payment.price,0)
+    //     const result = await paymentCollection.aggregate([
+    //       {
+    //         $group:{
+    //           _id: null,
+    //           totalRevenue: {
+    //             $sum: '$price'
+    //           }
+    //         }
+    //       }
+    //     ]).toArray();
+  
+    //     const revenue = result.length > 0 ? result[0].totalRevenue : 0
+  
+    //     res.send({
+    //       users,
+    //       menuItems,
+    //       orders,
+    //       revenue
+    //     })
+    //   })
 
 
 
