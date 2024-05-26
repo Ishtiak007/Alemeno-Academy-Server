@@ -28,7 +28,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
 
     const coursesCollection = client.db("AlemenoAcademyDB").collection("courses");
@@ -110,7 +110,7 @@ async function run() {
 
 
 
-    // payment intent
+    // Payment Intent
     app.post('/create-payment-intent',async(req,res)=>{
         const {price}=req.body;
         const amount = parseInt(price * 100);
@@ -129,9 +129,6 @@ async function run() {
       app.post('/payments', async (req, res) => {
         const payment = req.body;
         const paymentResult = await paymentsCollection.insertOne(payment);
-  
-        //  carefully delete each item from the cart
-        console.log('payment info', payment);
         const query = {
           _id: {
             $in: payment.cartIds.map(id => new ObjectId(id))
@@ -150,42 +147,12 @@ async function run() {
         const result = await paymentsCollection.find(query).toArray();
         res.send(result)
       });
-      //analytics
-    //   app.get('/admin-stats',async(req,res)=>{
-    //     const users = await usersCollection.estimatedDocumentCount();
-    //     const menuItems = await menuCollection.estimatedDocumentCount();
-    //     const orders = await paymentCollection.estimatedDocumentCount();
-  
-    //     // this is not the bese way to revenue
-    //     // const payments = await paymentCollection.find().toArray();
-    //     // const revenue = payments.reduce((total,payment)=>total+payment.price,0)
-    //     const result = await paymentCollection.aggregate([
-    //       {
-    //         $group:{
-    //           _id: null,
-    //           totalRevenue: {
-    //             $sum: '$price'
-    //           }
-    //         }
-    //       }
-    //     ]).toArray();
-  
-    //     const revenue = result.length > 0 ? result[0].totalRevenue : 0
-  
-    //     res.send({
-    //       users,
-    //       menuItems,
-    //       orders,
-    //       revenue
-    //     })
-    //   })
-
 
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
